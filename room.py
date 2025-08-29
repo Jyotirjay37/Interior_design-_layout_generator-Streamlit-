@@ -289,6 +289,115 @@ class InteriorDesignGenerator:
         )
         return fig
 
+    def generate_ar_preview(self, detections, room_size):
+        """Generate AR preview HTML for web-based augmented reality"""
+        width, height = room_size
+        
+        # Create HTML template for AR preview
+        html_template = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>AR Room Preview</title>
+            <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+            <script src="https://unpkg.com/aframe-look-at-component@0.8.0/dist/aframe-look-at-component.min.js"></script>
+            <style>
+                body {{ margin: 0; overflow: hidden; }}
+                a-scene {{ width: 100%; height: 100vh; }}
+            </style>
+        </head>
+        <body>
+            <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false;">
+                <a-marker type="pattern" url="https://raw.githubusercontent.com/AR-js-org/AR.js/master/data/data/patt.hiro">
+                    <!-- Room floor -->
+                    <a-plane 
+                        position="0 0 0" 
+                        rotation="-90 0 0" 
+                        width="{width/100}" 
+                        height="{height/100}" 
+                        color="#7BC8A4"
+                        opacity="0.3">
+                    </a-plane>
+                    
+                    <!-- Room walls -->
+                    <a-box 
+                        position="0 {height/200} -{height/200}" 
+                        width="{width/100}" 
+                        height="{height/100}" 
+                        depth="0.1" 
+                        color="#808080"
+                        opacity="0.2">
+                    </a-box>
+                    
+                    <!-- Furniture items -->
+                    {self._generate_furniture_entities(detections)}
+                </a-marker>
+                
+                <a-entity camera></a-entity>
+            </a-scene>
+        </body>
+        </html>
+        """
+        
+        return html_template
+
+    def _generate_furniture_entities(self, detections):
+        """Generate A-Frame entities for detected furniture"""
+        entities = ""
+        furniture_colors = {
+            'sofa': '#8B4513',      # saddlebrown
+            'chair': '#D2691E',     # chocolate
+            'table': '#A0522D',     # sienna
+            'bed': '#CD853F',       # peru
+            'tv': '#2F4F4F',        # darkslategray
+            'almirah': '#696969',   # dimgray
+            'fridge': '#708090',    # slategray
+            'swivelchair': '#DAA520', # goldenrod
+            'lamp': '#DAA520',      # goldenrod
+            'cabinet': '#A9A9A9'    # darkgray
+        }
+        
+        for i, det in enumerate(detections):
+            bbox = det['bbox']
+            x1, y1, x2, y2 = bbox
+            furniture_type = det['class']
+            
+            # Calculate center position and dimensions
+            center_x = (x1 + x2) / 200  # Scale down for AR scene
+            center_y = (y1 + y2) / 200
+            width = (x2 - x1) / 100
+            height = (y2 - y1) / 100
+            depth = 0.5  # Fixed depth for AR
+            
+            color = furniture_colors.get(furniture_type, '#FF6B6B')
+            
+            entities += f"""
+            <a-box 
+                position="{center_x} {depth/2} {center_y}"
+                width="{width}"
+                height="{depth}"
+                depth="{height}"
+                color="{color}"
+                opacity="0.8"
+                look-at="[camera]">
+                <a-text 
+                    value="{furniture_type}"
+                    position="0 {depth/2 + 0.1} 0"
+                    align="center"
+                    color="white"
+                    scale="2 2 2">
+                </a-text>
+            </a-box>
+            """
+        
+        return entities
+
+    def save_ar_preview(self, html_content, filename="ar_preview.html"):
+        """Save AR preview HTML to a file"""
+        with open(filename, 'w', encoding='utf-8') as f:
+            f.write(html_content)
+        return filename
+
     def generate_shopping_list(self, detections, style):
         """Generate a shopping list based on detected furniture and style"""
         # Furniture recommendations database
@@ -501,17 +610,71 @@ def main():
     
     with feature_col1:
         st.subheader("📐 3D Visualization")
-        st.write("Generate 3D room layouts")
-        if st.button("Generate 3D Layout"):
+        st.write("Generate 3D room layouts and AR preview")
+        if st.button("Generate 3D Layout & AR Preview"):
             if uploaded_file is not None and detections:
                 # Get room dimensions from the image
                 height, width = opencv_image.shape[:2]
                 room_size = (width, height)
                 
                 # Generate 3D layout
-                with st.spinner("🔄 Generating 3D layout..."):
+                with st.spinner("🔄 Generating 3D layout and AR preview..."):
                     fig_3d = generator.generate_3d_layout(detections, room_size)
                     st.plotly_chart(fig_3d, use_container_width=True)
+                    
+                    # Generate AR preview
+                    ar_html = generator.generate_ar_preview(detections, room_size)
+                    ar_filename = generator.save_ar_preview(ar_html)
+                    
+                    # Display AR preview instructions
+                    st.subheader("📱 AR Preview")
+                    st.markdown("""
+                    ### How to use AR Preview:
+                    1. **Download the AR preview file** below
+                    2. **Open it on your mobile device** (requires camera access)
+                    3. **Point your camera** at the Hiro marker pattern
+                    4. **View your room layout in augmented reality!**
+                    
+                    **Note:** You'll need to print or display the Hiro marker pattern:
+                    [Download Hiro Marker](https://raw.githubusercontent.com/AR-js-org/AR.js/master/data/data/patt.hiro)
+                    """)
+                    
+                    # Download button for AR preview
+                    st.download_button(
+                        label="📥 Download AR Preview HTML",
+                        data=ar_html,
+                        file_name="ar_room_preview.html",
+                        mime="text/html",
+                        help="Download the AR preview file to view on your mobile device"
+                    )
+                    
+                    # Display QR code for easy access
+                    st.subheader("📲 Quick Access QR Code")
+                    st.info("Scan this QR code with your phone to quickly access the AR preview:")
+                    
+                    # Generate QR code
+                    try:
+                        import qrcode
+                        from io import BytesIO
+                        
+                        # Create QR code
+                        qr = qrcode.QRCode(
+                            version=1,
+                            error_correction=qrcode.constants.ERROR_CORRECT_L,
+                            box_size=10,
+                            border=4,
+                        )
+                        qr.add_data(f"file:///{ar_filename}")
+                        qr.make(fit=True)
+                        
+                        img = qr.make_image(fill_color="black", back_color="white")
+                        buf = BytesIO()
+                        img.save(buf, format="PNG")
+                        buf.seek(0)
+                        
+                        st.image(buf, caption="Scan to open AR preview", width=200)
+                    except ImportError:
+                        st.warning("QR code generation requires qrcode[pil] package. Install with: pip install qrcode[pil]")
             else:
                 st.warning("Please upload an image and detect furniture first!")
     
@@ -562,7 +725,67 @@ def main():
         st.subheader("📱 AR Preview")
         st.write("Preview changes in AR")
         if st.button("AR Preview"):
-            st.info("AR preview would be implemented here")
+            if uploaded_file is not None and detections:
+                # Get room dimensions from the image
+                height, width = opencv_image.shape[:2]
+                room_size = (width, height)
+                
+                # Generate AR preview
+                with st.spinner("🔄 Generating AR preview..."):
+                    ar_html = generator.generate_ar_preview(detections, room_size)
+                    ar_filename = generator.save_ar_preview(ar_html)
+                    
+                    # Display AR preview instructions
+                    st.subheader("📱 AR Preview Generated!")
+                    st.markdown("""
+                    ### How to use AR Preview:
+                    1. **Download the AR preview file** below
+                    2. **Open it on your mobile device** (requires camera access)
+                    3. **Point your camera** at the Hiro marker pattern
+                    4. **View your room layout in augmented reality!**
+                    
+                    **Note:** You'll need to print or display the Hiro marker pattern:
+                    [Download Hiro Marker](https://raw.githubusercontent.com/AR-js-org/AR.js/master/data/data/patt.hiro)
+                    """)
+                    
+                    # Download button for AR preview
+                    st.download_button(
+                        label="📥 Download AR Preview HTML",
+                        data=ar_html,
+                        file_name="ar_room_preview.html",
+                        mime="text/html",
+                        help="Download the AR preview file to view on your mobile device"
+                    )
+                    
+                    # Display QR code for easy access
+                    st.subheader("📲 Quick Access QR Code")
+                    st.info("Scan this QR code with your phone to quickly access the AR preview:")
+                    
+                    # Generate QR code
+                    try:
+                        import qrcode
+                        from io import BytesIO
+                        
+                        # Create QR code
+                        qr = qrcode.QRCode(
+                            version=1,
+                            error_correction=qrcode.constants.ERROR_CORRECT_L,
+                            box_size=10,
+                            border=4,
+                        )
+                        qr.add_data(f"file:///{ar_filename}")
+                        qr.make(fit=True)
+                        
+                        img = qr.make_image(fill_color="black", back_color="white")
+                        buf = BytesIO()
+                        img.save(buf, format="PNG")
+                        buf.seek(0)
+                        
+                        st.image(buf, caption="Scan to open AR preview", width=200)
+                    except ImportError:
+                        st.warning("QR code generation requires qrcode[pil] package. Install with: pip install qrcode[pil]")
+            else:
+                st.warning("Please upload an image and detect furniture first!")
     
     # Footer
     st.markdown("---")
