@@ -88,7 +88,7 @@ This project is an interactive room interior design generator using computer vis
 
 - Ensure `yolov8n.pt` is ~6.2MB and not corrupted.
 - If model loading fails, re-download using provided scripts.
-- See [`README_FIX.md`](README_FIX.md) for model loading error solutions.
+
 
 ---
 
