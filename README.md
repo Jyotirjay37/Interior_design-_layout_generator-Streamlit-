@@ -20,11 +20,9 @@ This project is an interactive room interior design generator using computer vis
 ## 🖼️ Output Examples
 
 - **Detected Furniture:**  
-  ![Sample Detection](output/sample_detection.png)  
   *Bounding boxes and labels for detected furniture.*
 
-- **3D Room Layout:**  
-  ![3D Layout](output/sample_3d_layout.png)  
+- **3D Room Layout:**   
   *Interactive 3D visualization of room and furniture.*
 
 - **Shopping List (Planned):**  
